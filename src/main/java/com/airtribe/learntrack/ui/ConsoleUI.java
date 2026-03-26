@@ -133,7 +133,7 @@ public class ConsoleUI {
             }
         }
     }
-
+//change
     private void handleEnrollmentMenu() throws EntityNotFoundException, InvalidInputException {
         boolean inEnrollmentMenu = true;
 
