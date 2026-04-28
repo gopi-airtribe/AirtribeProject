@@ -1,0 +1,255 @@
+import java.time.LocalDate;
+import java.util.*;
+
+/* =========================
+   ENUMS
+   ========================= */
+enum BookStatus {
+    AVAILABLE,
+    BORROWED,
+    RESERVED
+}
+
+/* =========================
+   BOOK CLASS
+   ========================= */
+class Book {
+    private String title;
+    private String author;
+    private String isbn;
+    private int year;
+    private BookStatus status;
+    private List<Observer> observers = new ArrayList<>();
+
+    public Book(String title, String author, String isbn, int year) {
+        this.title = title;
+        this.author = author;
+        this.isbn = isbn;
+        this.year = year;
+        this.status = BookStatus.AVAILABLE;
+    }
+
+    public String getTitle() { return title; }
+    public String getAuthor() { return author; }
+    public String getIsbn() { return isbn; }
+    public BookStatus getStatus() { return status; }
+
+    public void setStatus(BookStatus status) {
+        this.status = status;
+        if (status == BookStatus.AVAILABLE) {
+            notifyObservers();
+        }
+    }
+
+    public void addObserver(Observer o) {
+        observers.add(o);
+    }
+
+    private void notifyObservers() {
+        for (Observer o : observers) {
+            o.update(this);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return title + " by " + author + " [" + status + "]";
+    }
+}
+
+/* =========================
+   PATRON CLASS (Observer)
+   ========================= */
+class Patron implements Observer {
+    private String id;
+    private String name;
+    private List<Loan> loans = new ArrayList<>();
+
+    public Patron(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public void borrow(Loan loan) {
+        loans.add(loan);
+    }
+
+    public void returnBook(Book book) {
+        for (Loan loan : loans) {
+            if (loan.getBook() == book && !loan.isReturned()) {
+                loan.setReturned(true);
+                book.setStatus(BookStatus.AVAILABLE);
+                break;
+            }
+        }
+    }
+
+    @Override
+    public void update(Book book) {
+        System.out.println("Notification to " + name + ": " + book.getTitle() + " is now available!");
+    }
+
+    public String getId() { return id; }
+}
+
+/* =========================
+   LOAN CLASS
+   ========================= */
+class Loan {
+    private Book book;
+    private Patron patron;
+    private LocalDate issueDate;
+    private LocalDate dueDate;
+    private boolean returned;
+
+    public Loan(Book book, Patron patron) {
+        this.book = book;
+        this.patron = patron;
+        this.issueDate = LocalDate.now();
+        this.dueDate = issueDate.plusDays(14);
+        this.returned = false;
+    }
+
+    public Book getBook() { return book; }
+    public boolean isReturned() { return returned; }
+    public void setReturned(boolean returned) { this.returned = returned; }
+}
+
+/* =========================
+   FACTORY PATTERN
+   ========================= */
+class BookFactory {
+    public static Book createBook(String title, String author, String isbn, int year) {
+        return new Book(title, author, isbn, year);
+    }
+}
+
+/* =========================
+   STRATEGY PATTERN
+   ========================= */
+interface SearchStrategy {
+    List<Book> search(List<Book> books, String query);
+}
+
+class TitleSearch implements SearchStrategy {
+    public List<Book> search(List<Book> books, String query) {
+        List<Book> result = new ArrayList<>();
+        for (Book b : books) {
+            if (b.getTitle().toLowerCase().contains(query.toLowerCase())) {
+                result.add(b);
+            }
+        }
+        return result;
+    }
+}
+
+class AuthorSearch implements SearchStrategy {
+    public List<Book> search(List<Book> books, String query) {
+        List<Book> result = new ArrayList<>();
+        for (Book b : books) {
+            if (b.getAuthor().toLowerCase().contains(query.toLowerCase())) {
+                result.add(b);
+            }
+        }
+        return result;
+    }
+}
+
+/* =========================
+   OBSERVER INTERFACE
+   ========================= */
+interface Observer {
+    void update(Book book);
+}
+
+/* =========================
+   LIBRARY CLASS
+   ========================= */
+class Library {
+    private Map<String, Book> books = new HashMap<>();
+    private Map<String, Patron> patrons = new HashMap<>();
+
+    public void addBook(Book book) {
+        books.put(book.getIsbn(), book);
+    }
+
+    public void registerPatron(Patron patron) {
+        patrons.put(patron.getId(), patron);
+    }
+
+    public boolean checkoutBook(String patronId, String isbn) {
+        Patron patron = patrons.get(patronId);
+        Book book = books.get(isbn);
+
+        if (patron == null || book == null) return false;
+
+        if (book.getStatus() == BookStatus.AVAILABLE) {
+            book.setStatus(BookStatus.BORROWED);
+            Loan loan = new Loan(book, patron);
+            patron.borrow(loan);
+            return true;
+        }
+        return false;
+    }
+
+    public void returnBook(String patronId, String isbn) {
+        Patron patron = patrons.get(patronId);
+        Book book = books.get(isbn);
+
+        if (patron != null && book != null) {
+            patron.returnBook(book);
+        }
+    }
+
+    public List<Book> searchBooks(SearchStrategy strategy, String query) {
+        return strategy.search(new ArrayList<>(books.values()), query);
+    }
+
+    public void reserveBook(String patronId, String isbn) {
+        Patron patron = patrons.get(patronId);
+        Book book = books.get(isbn);
+
+        if (book != null && patron != null) {
+            book.addObserver(patron);
+            book.setStatus(BookStatus.RESERVED);
+        }
+    }
+}
+
+/* =========================
+   MAIN CLASS (TEST)
+   ========================= */
+public class LibrarySystem {
+    public static void main(String[] args) {
+
+        Library library = new Library();
+
+        // Create books using Factory
+        Book b1 = BookFactory.createBook("Java Basics", "James", "111", 2020);
+        Book b2 = BookFactory.createBook("System Design", "Alex", "222", 2022);
+
+        library.addBook(b1);
+        library.addBook(b2);
+
+        // Register patrons
+        Patron p1 = new Patron("P1", "Gopi");
+        Patron p2 = new Patron("P2", "Ravi");
+
+        library.registerPatron(p1);
+        library.registerPatron(p2);
+
+        // Borrow book
+        library.checkoutBook("P1", "111");
+
+        // Reserve book
+        library.reserveBook("P2", "111");
+
+        // Return book → triggers notification
+        library.returnBook("P1", "111");
+
+        // Search using Strategy
+        List<Book> results = library.searchBooks(new TitleSearch(), "Java");
+        System.out.println("Search Results:");
+        results.forEach(System.out::println);
+    }
+}
